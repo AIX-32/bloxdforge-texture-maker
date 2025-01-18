@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Texture pack file holder</title>
+  <style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #333; /* Dark gray background */
+  color: #fff; /* White text color for contrast */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 20px;
+}
+
+h1 {
+  font-size: 2.5rem;
+  color: #fff; /* White heading text */
+  margin-bottom: 20px;
+}
+
+#dropArea {
+  width: 80%;
+  max-width: 600px;
+  border: 2px dashed #FFA500; /* Orange border */
+  padding: 40px;
+  text-align: center;
+  background-color: #444; /* Dark background for the drop area */
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+  transition: background-color 0.3s ease;
+}
+
+#dropArea:hover {
+  background-color: #555; /* Slightly lighter dark gray on hover */
+}
+
+#dropArea span {
+  color: #FFA500; /* Orange text */
+  font-weight: bold;
+}
+
+button {
+  background-color: #FFA500; /* Orange button */
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #FF8C00; /* Darker orange on hover */
+}
+
+.file-list {
+  width: 80%;
+  max-width: 600px;
+  margin-top: 20px;
+  background-color: #444; /* Dark background for the file list */
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #555; /* Darker background for file items */
+  border-radius: 8px;
+  transition: background-color 0.3s ease;
+}
+
+.file-item:hover {
+  background-color: #666; /* Slightly lighter dark gray on hover */
+}
+
+.delete-btn {
+  color: red;
+  cursor: pointer;
+  font-weight: bold;
+  transition: color 0.3s ease;
+}
+
+.delete-btn:hover {
+  color: #d32f2f;
+}
+
+.file-item span {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+  </style>
+</head>
+<body>
+
+  <h1>PackVault</h1>
+
+  <!-- Drag-and-drop area -->
+  <div id="dropArea">
+    <span>Drag and drop textures here</span>
+  </div>
+
+  <button id="downloadBtn">Download All Files as ZIP</button>
+
+  <div class="file-list" id="fileList">
+    <h2>Your Textures:</h2>
+    <!-- Files will be listed here -->
+  </div>
+
+  <!-- Add JSZip library -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.7.1/dist/jszip.min.js"></script>
+
+  <script>
+    // Open IndexedDB
+    const dbName = 'FileManagerDB';
+    const dbVersion = 1;
+    let db;
+
+    // Open IndexedDB
+    function openDB() {
+      const request = indexedDB.open(dbName, dbVersion);
+
+      request.onupgradeneeded = (event) => {
+        db = event.target.result;
+        const objectStore = db.createObjectStore('files', { keyPath: 'name' });
+        objectStore.createIndex('name', 'name', { unique: true });
+      };
+
+      request.onsuccess = (event) => {
+        db = event.target.result;
+        console.log('Database opened successfully!');
+        listFiles();  // Refresh file list on DB open
+      };
+
+      request.onerror = (event) => {
+        console.error('Error opening database:', event.target.error);
+      };
+    }
+
+    // Upload files to IndexedDB
+    function uploadFile(file) {
+      const transaction = db.transaction(['files'], 'readwrite');
+      const objectStore = transaction.objectStore('files');
+
+      const fileRecord = {
+        name: file.name,
+        data: file,
+      };
+
+      const request = objectStore.put(fileRecord);
+
+      request.onsuccess = () => {
+        console.log('File uploaded successfully');
+        listFiles();  // Refresh file list after uploading
+      };
+
+      request.onerror = (event) => {
+        console.error('Error uploading file:', event.target.error);
+      };
+    }
+
+    // Delete a file from IndexedDB
+    function deleteFile(fileName) {
+      const transaction = db.transaction(['files'], 'readwrite');
+      const objectStore = transaction.objectStore('files');
+
+      const request = objectStore.delete(fileName);
+
+      request.onsuccess = () => {
+        console.log(`File ${fileName} deleted successfully`);
+        listFiles();  // Refresh file list after deletion
+      };
+
+      request.onerror = (event) => {
+        console.error('Error deleting file:', event.target.error);
+      };
+    }
+
+    // List files stored in IndexedDB
+    function listFiles() {
+      const transaction = db.transaction(['files'], 'readonly');
+      const objectStore = transaction.objectStore('files');
+      const request = objectStore.getAll();
+
+      request.onsuccess = (event) => {
+        const files = event.target.result;
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = '<h2>Your Textures:</h2>';
+
+        // Display the files in the list
+        files.forEach(fileRecord => {
+          const fileItem = document.createElement('div');
+          fileItem.classList.add('file-item');
+          fileItem.innerHTML = `
+            <span>${fileRecord.name}</span>
+            <span class="delete-btn" onclick="deleteFile('${fileRecord.name}')">Delete</span>
+          `;
+          fileList.appendChild(fileItem);
+        });
+      };
+
+      request.onerror = (event) => {
+        console.error('Error listing files:', event.target.error);
+      };
+    }
+
+    // Download all files as a ZIP
+    function downloadAllFiles() {
+      const transaction = db.transaction(['files'], 'readonly');
+      const objectStore = transaction.objectStore('files');
+      const request = objectStore.getAll();
+
+      request.onsuccess = async (event) => {
+        const files = event.target.result;
+        
+        if (files.length === 0) {
+          alert("No files to download.");
+          return;
+        }
+
+        const zip = new JSZip();
+        
+        // Add each file to the ZIP
+        files.forEach(fileRecord => {
+          zip.file(fileRecord.name, fileRecord.data);
+        });
+
+        // Generate the ZIP file and trigger download
+        zip.generateAsync({ type: "blob" }).then(function(content) {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(content);
+          link.download = 'all_files.zip';
+          link.click();
+        });
+      };
+
+      request.onerror = (event) => {
+        console.error('Error downloading files:', event.target.error);
+      };
+    }
+
+    // Handle file drag-and-drop
+    function handleDrop(event) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const files = event.dataTransfer.files;
+      for (const file of files) {
+        uploadFile(file);
+      }
+    }
+
+    // Handle drag over event to allow dropping
+    function handleDragOver(event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Initialize the app
+    document.addEventListener('DOMContentLoaded', () => {
+      openDB();
+
+      // Set up drag-and-drop events
+      const dropArea = document.getElementById('dropArea');
+      dropArea.addEventListener('drop', handleDrop);
+      dropArea.addEventListener('dragover', handleDragOver);
+
+      // Download all files as a ZIP
+      const downloadBtn = document.getElementById('downloadBtn');
+      downloadBtn.addEventListener('click', downloadAllFiles);
+    });
+  </script>
+
+</body>
+</html>
