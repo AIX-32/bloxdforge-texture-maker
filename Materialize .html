@@ -195,59 +195,11 @@
       background: #888;
     }
 
-    #password-modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.9);
-      justify-content: center;
-      align-items: center;
-      color: white;
-    }
 
-    .modal-content {
-      background: #222;
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-    }
-
-    #password-input {
-      padding: 10px;
-      margin: 10px;
-      border-radius: 5px;
-      outline: none;
-    }
-
-    #submit-password-btn {
-      padding: 10px 20px;
-      margin: 5px;
-      background-color: #FFA500;
-      border: none;
-      color: white;
-      cursor: pointer;
-      border-radius: 5px;
-    }
-
-    #error-message {
-      color: red;
-      display: none;
-    }
   </style>
 </head>
 <body>
-<div id="password-modal">
-  <div class="modal-content">
-    <h3>Enter Key.</h3>
-    <input type="password" id="password-input" placeholder="Enter your key" />
-    <button id="submit-password-btn">Submit</button>
-    <button id="submit-password-btn" onclick="openLink()">Get Key?</button>
-    <p id="error-message">Incorrect password, try again.</p>
-  </div>
-</div>
+
 
   <div id="sidebar">
     <h3>Textures:</h3>
@@ -534,38 +486,7 @@
         }
       }
     });
-
-    let passwordModal = document.getElementById('password-modal');
-    let passwordInput = document.getElementById('password-input');
-    let submitPasswordBtn = document.getElementById('submit-password-btn');
-    let errorMessage = document.getElementById('error-message');
-
-    const correctPasswordHash = "6caf7c13171dbb0598cd9b52dbb77e0d75f049c78c7d08ccd20307e95c021991";
-
-    window.onload = function() {
-      passwordModal.style.display = "flex";
-    };
-
-    submitPasswordBtn.addEventListener('click', function() {
-      let enteredPassword = passwordInput.value;
-      let enteredPasswordHash = CryptoJS.SHA256(enteredPassword).toString();
-
-      if (enteredPasswordHash === correctPasswordHash) {
-        passwordModal.style.display = "none";
-      } else {
-        errorMessage.style.display = "block";
-      }
-    });
-
-    passwordInput.addEventListener('keydown', function(event) {
-      if (event.key === 'Enter') {
-        submitPasswordBtn.click();
-      }
-    });
-
-    function openLink() {
-      window.open('https://link-hub.net/1268796/key-for-bloxdforge-tpack', '_blank');
-    }
+    
   </script>
 </body>
 </html>
