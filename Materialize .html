@@ -195,12 +195,109 @@
       background: #888;
     }
 
+    /* New UX Improvements */
+    .tool-active {
+        background-color: #5ed267 !important;
+        box-shadow: 0 0 10px rgba(94, 210, 103, 0.5);
+    }
 
+    .tooltip {
+        position: relative;
+        display: inline-block;
+    }
+
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 120px;
+        background-color: #555;
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 5px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -60px;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    #loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    #loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    #error-message {
+        color: #ff6b6b;
+        text-align: center;
+        margin-top: 20px;
+        display: none;
+    }
+
+    /* New color input styles */
+    .color-input-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 10px;
+    }
+
+    .color-text-input {
+        width: 100%;
+        padding: 5px;
+        background-color: #444;
+        color: #fff;
+        border: 1px solid #555;
+        border-radius: 5px;
+        text-align: center;
+        text-transform: uppercase;
+    }
+
+    .color-text-input:focus {
+        outline: none;
+        border-color: #5ed267;
+    }
+
+    .color-text-input.invalid {
+        border-color: #ff6b6b;
+    }
   </style>
 </head>
 <body>
-
-
+  <div id="loading-overlay">
+    <div id="loading-spinner"></div>
+  </div>
+  <div id="error-message">
+    An error occurred. Please try again.
+  </div>
   <div id="sidebar">
     <h3>Textures:</h3>
     <ul id="file-list"></ul>
@@ -211,13 +308,18 @@
     <canvas id="canvas" width="500" height="500"></canvas>
   </div>
   <div id="toolbar">
+    <div class="color-picker-container">
+      <input type="color" id="color-picker">
+      <div class="color-input-container">
+        <input type="text" id="color-text-input" class="color-text-input" maxlength="7" placeholder="Hex Color">
+      </div>
+    </div>
     <button id="undo-btn">Undo</button>
     <button id="darken-tool">Darken</button>
     <button id="lighten-tool">Lighten</button>
     <button id="eraser-tool">Eraser</button>
     <button id="eyedropper-tool">Eyedropper</button>
     <button id="pencil-tool">Pencil</button>
-    <input type="color" id="color-picker" value="#FFFFFF" />
     <button id="save-btn">Save Texture</button>
   </div>
   
@@ -252,7 +354,7 @@
       folderInput.click();
     });
 
-    folderInput.addEventListener('change', handleFiles, false);
+    folderInput.addEventListener('change', enhancedHandleFiles, false);
 
     function handleFiles(event) {
       let files = event.target.files;
@@ -309,61 +411,107 @@
       currentColor = e.target.value;
     });
 
-    canvas.addEventListener('mousedown', (e) => {
-      const { offsetX, offsetY } = e;
-      const pixelX = Math.floor(offsetX / (500 / selectedTexture.width));
-      const pixelY = Math.floor(offsetY / (500 / selectedTexture.height));
-      const pixel = ctx.getImageData(pixelX * texturePixelSize, pixelY * texturePixelSize, texturePixelSize, texturePixelSize).data;
-      
-      if (currentTool === 'darken') {
-        let [r, g, b, a] = pixel;
-        if (a !== 0) {
-          ctx.fillStyle = `rgb(${Math.max(r - 30, 0)}, ${Math.max(g - 30, 0)}, ${Math.max(b - 30, 0)})`;
-          ctx.fillRect(pixelX * (500 / selectedTexture.width), pixelY * (500 / selectedTexture.height), texturePixelSize, texturePixelSize);
-        }
-      } else if (currentTool === 'lighten') {
-        let [r, g, b, a] = pixel;
-        if (a !== 0) {
-          ctx.fillStyle = `rgb(${Math.min(r + 30, 255)}, ${Math.min(g + 30, 255)}, ${Math.min(b + 30, 255)})`;
-          ctx.fillRect(pixelX * (500 / selectedTexture.width), pixelY * (500 / selectedTexture.height), texturePixelSize, texturePixelSize);
-        }
-      } else if (currentTool === 'eraser') {
-        ctx.clearRect(pixelX * (500 / selectedTexture.width), pixelY * (500 / selectedTexture.height), texturePixelSize, texturePixelSize);
-      } else if (currentTool === 'pencil') {
-        ctx.fillStyle = currentColor;
-        ctx.fillRect(pixelX * (500 / selectedTexture.width), pixelY * (500 / selectedTexture.height), texturePixelSize, texturePixelSize);
-      }
-    });
+    // Simplified Undo System
+    let undoStack = [];
+    const MAX_UNDO_STEPS = 50;
 
-    canvas.addEventListener('mousemove', (e) => {
-      if (e.buttons === 1) {
+    function trackAction(action) {
+        if (undoStack.length >= MAX_UNDO_STEPS) {
+            undoStack.shift();
+        }
+        undoStack.push(action);
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
         const { offsetX, offsetY } = e;
         const pixelX = Math.floor(offsetX / (500 / selectedTexture.width));
         const pixelY = Math.floor(offsetY / (500 / selectedTexture.height));
+        const x = pixelX * (500 / selectedTexture.width);
+        const y = pixelY * (500 / selectedTexture.height);
+
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.getImageData(x, y, texturePixelSize, texturePixelSize);
+        
+        // Store original pixel data for undo
+        const originalPixelData = {
+            x: x,
+            y: y,
+            imageData: imageData
+        };
+
         if (currentTool === 'pencil') {
-          ctx.fillStyle = currentColor;
-          ctx.fillRect(pixelX * (500 / selectedTexture.width), pixelY * (500 / selectedTexture.height), texturePixelSize, texturePixelSize);
+            ctx.fillStyle = currentColor;
+            ctx.fillRect(x, y, texturePixelSize, texturePixelSize);
+            trackAction(originalPixelData);
+        } else if (currentTool === 'darken') {
+            // Darken the pixel
+            ctx.fillStyle = `rgba(${
+                Math.max(0, imageData.data[0] - 50)}, ${
+                Math.max(0, imageData.data[1] - 50)}, ${
+                Math.max(0, imageData.data[2] - 50)}, ${
+                imageData.data[3]/255})`;
+            ctx.fillRect(x, y, texturePixelSize, texturePixelSize);
+            trackAction(originalPixelData);
+        } else if (currentTool === 'lighten') {
+            // Lighten the pixel
+            ctx.fillStyle = `rgba(${
+                Math.min(255, imageData.data[0] + 50)}, ${
+                Math.min(255, imageData.data[1] + 50)}, ${
+                Math.min(255, imageData.data[2] + 50)}, ${
+                imageData.data[3]/255})`;
+            ctx.fillRect(x, y, texturePixelSize, texturePixelSize);
+            trackAction(originalPixelData);
+        } else if (currentTool === 'eraser') {
+            ctx.clearRect(x, y, texturePixelSize, texturePixelSize);
+            trackAction(originalPixelData);
         }
-      }
     });
 
-    saveBtn.addEventListener('click', () => {
-      if (!selectedTexture) return;
+    // Add mousemove event for continuous drawing
+    canvas.addEventListener('mousemove', (e) => {
+        if (e.buttons === 1) {
+            const { offsetX, offsetY } = e;
+            const pixelX = Math.floor(offsetX / (500 / selectedTexture.width));
+            const pixelY = Math.floor(offsetY / (500 / selectedTexture.height));
+            const x = pixelX * (500 / selectedTexture.width);
+            const y = pixelY * (500 / selectedTexture.height);
 
-      let tempCanvas = document.createElement('canvas');
-      let tempCtx = tempCanvas.getContext('2d');
-      tempCanvas.width = textureWidth;
-      tempCanvas.height = textureHeight;
-
-      tempCtx.drawImage(canvas, 0, 0, textureWidth, textureHeight);
-
-      const dataUrl = tempCanvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = selectedTexture.src.split('/').pop();
-      link.click();
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(x, y, texturePixelSize, texturePixelSize);
+            
+            if (currentTool === 'pencil') {
+                ctx.fillStyle = currentColor;
+                ctx.fillRect(x, y, texturePixelSize, texturePixelSize);
+            } else if (currentTool === 'darken') {
+                // Darken the pixel
+                ctx.fillStyle = `rgba(${
+                    Math.max(0, imageData.data[0] - 50)}, ${
+                    Math.max(0, imageData.data[1] - 50)}, ${
+                    Math.max(0, imageData.data[2] - 50)}, ${
+                    imageData.data[3]/255})`;
+                ctx.fillRect(x, y, texturePixelSize, texturePixelSize);
+            } else if (currentTool === 'lighten') {
+                // Lighten the pixel
+                ctx.fillStyle = `rgba(${
+                    Math.min(255, imageData.data[0] + 50)}, ${
+                    Math.min(255, imageData.data[1] + 50)}, ${
+                    Math.min(255, imageData.data[2] + 50)}, ${
+                    imageData.data[3]/255})`;
+                ctx.fillRect(x, y, texturePixelSize, texturePixelSize);
+            }
+        }
     });
-    
+
+    document.getElementById('undo-btn').addEventListener('click', () => {
+        if (undoStack.length > 0) {
+            const lastAction = undoStack.pop();
+            const ctx = canvas.getContext('2d');
+            
+            // Restore the original pixel data
+            ctx.putImageData(lastAction.imageData, lastAction.x, lastAction.y);
+        }
+    });
+
     let customColors = [];
     let customColorsContainer = document.getElementById('custom-colors');
     let colorInput = document.getElementById('color-input');
@@ -424,69 +572,102 @@
       }
     });
 
-    let undoStack = [];
-    let redoStack = [];
-
-    function trackAction(action) {
-      undoStack.push(action);
+    // Loading and error handling
+    function showLoading() {
+        document.getElementById('loading-overlay').style.display = 'flex';
     }
 
-    document.getElementById('undo-btn').addEventListener('click', () => {
-      if (undoStack.length > 0) {
-        let lastAction = undoStack.pop();
-        redoStack.push(lastAction);
-
-        redrawCanvas();
-      }
-    });
-
-    function redrawCanvas() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      ctx.drawImage(selectedTexture, 0, 0, canvas.width, canvas.height);
-
-      undoStack.forEach(action => {
-        ctx.fillStyle = action.color;
-        ctx.fillRect(action.x, action.y, texturePixelSize, texturePixelSize);
-      });
+    function hideLoading() {
+        document.getElementById('loading-overlay').style.display = 'none';
     }
 
-    canvas.addEventListener('mousedown', (e) => {
-      const { offsetX, offsetY } = e;
-      const pixelX = Math.floor(offsetX / (500 / selectedTexture.width));
-      const pixelY = Math.floor(offsetY / (500 / selectedTexture.height));
-      const x = pixelX * (500 / selectedTexture.width);
-      const y = pixelY * (500 / selectedTexture.height);
-      const pixel = ctx.getImageData(x, y, texturePixelSize, texturePixelSize).data;
+    function showError(message) {
+        const errorElement = document.getElementById('error-message');
+        errorElement.textContent = message || 'An error occurred. Please try again.';
+        errorElement.style.display = 'block';
+        hideLoading();
+    }
 
-      if (currentTool === 'pencil' || currentTool === 'eraser') {
-        const action = { x, y, color: currentColor };
-        trackAction(action);
-      }
+    function hideError() {
+        document.getElementById('error-message').style.display = 'none';
+    }
 
-      if (currentTool === 'pencil') {
-        ctx.fillStyle = currentColor;
-        ctx.fillRect(x, y, texturePixelSize, texturePixelSize);
-      } else if (currentTool === 'eraser') {
-        ctx.clearRect(x, y, texturePixelSize, texturePixelSize);
-      }
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-      if (e.buttons === 1) {
-        const { offsetX, offsetY } = e;
-        const pixelX = Math.floor(offsetX / (500 / selectedTexture.width));
-        const pixelY = Math.floor(offsetY / (500 / selectedTexture.height));
-        const x = pixelX * (500 / selectedTexture.width);
-        const y = pixelY * (500 / selectedTexture.height);
-
-        if (currentTool === 'pencil') {
-          ctx.fillStyle = currentColor;
-          ctx.fillRect(x, y, texturePixelSize, texturePixelSize);
+    // Enhance file handling with loading states
+    function enhancedHandleFiles(event) {
+        try {
+            showLoading();
+            hideError();
+            handleFiles(event);
+        } catch (error) {
+            showError(error.message);
+        } finally {
+            hideLoading();
         }
+    }
+
+    // Add tooltips to tools
+    Object.entries({
+        'darken': document.getElementById('darken-tool'),
+        'lighten': document.getElementById('lighten-tool'),
+        'eraser': document.getElementById('eraser-tool'),
+        'pencil': document.getElementById('pencil-tool'),
+        'eyedropper': document.getElementById('eyedropper-tool')
+    }).forEach(([toolName, button]) => {
+        button.classList.add('tooltip');
+        const tooltipSpan = document.createElement('span');
+        tooltipSpan.classList.add('tooltiptext');
+        tooltipSpan.textContent = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+        button.appendChild(tooltipSpan);
+    });
+
+    // Color input functionality
+    const colorTextInput = document.getElementById('color-text-input');
+
+    // Initialize color text input with picker's initial color
+    colorTextInput.value = colorPicker.value;
+
+    // Update text input when color picker changes
+    colorPicker.addEventListener('input', (e) => {
+      currentColor = e.target.value;
+      colorTextInput.value = e.target.value;
+    });
+
+    // Validate and update color from text input
+    colorTextInput.addEventListener('input', (e) => {
+      let input = e.target.value.trim();
+      
+      // Automatically add # if not present
+      if (!input.startsWith('#')) {
+        input = '#' + input;
+      }
+
+      // Validate hex color format
+      const hexRegex = /^#([0-9A-Fa-f]{3}){1,2}$/;
+      if (hexRegex.test(input)) {
+        // Expand shorthand hex (e.g., #ABC to #AABBCC)
+        if (input.length === 4) {
+          input = '#' + input[1].repeat(2) + input[2].repeat(2) + input[3].repeat(2);
+        }
+
+        // Update color picker and current color
+        colorPicker.value = input;
+        currentColor = input;
+        
+        // Remove invalid class if present
+        colorTextInput.classList.remove('invalid');
+      } else {
+        // Add invalid class for visual feedback
+        colorTextInput.classList.add('invalid');
       }
     });
-    
+
+    // Handle paste events for additional validation
+    colorTextInput.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pastedText = e.clipboardData.getData('text').trim();
+      colorTextInput.value = pastedText;
+      colorTextInput.dispatchEvent(new Event('input'));
+    });
   </script>
 </body>
 </html>
